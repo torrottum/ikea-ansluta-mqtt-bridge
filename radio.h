@@ -24,7 +24,7 @@ public:
     writeReg(0x3E, 0xFF); //Maximum transmit power - write 0xFF to 0x3E (PATABLE)
   }
 
-  bool readPacket(char *buffer)
+  void readPacket()
   {
     sendStrobe(CC2500_SRX);
     writeReg(REG_IOCFG1, 0x01);
@@ -32,43 +32,21 @@ public:
 
     char len = readReg(CC2500_FIFO);
 
-    // I don't know why the packets I get are 6 bytes long. Missing the first
-    // and last byte I've seen in other people's code. But honestly, I have no
-    // idea what I'm doing. Just hacking something together based on the
-    // work of others :-).
-    if (len == 6)
-    {
-      for (int i = 0; i < 6; i++)
+    if (len <= 9) {
+      ESP_LOGD("radio", "Received packet length: %d", len);
+      ESP_LOGD("radio", "--- start packet ---");
+      for (int i = 0; i < len; i++)
       {
-        buffer[i] = readReg(CC2500_FIFO);
+        ESP_LOGD("radio", "%d: %04x", i, readReg(CC2500_FIFO));
       }
+      ESP_LOGD("radio", "--- end packet ---");
     }
 
     sendStrobe(CC2500_SIDLE); // Exit RX / TX
     sendStrobe(CC2500_SFRX);  // Flush the RX FIFO buffer
-    return len == 6;
+    // return len == 6;
   }
 
-  bool validCmd(char cmd)
-  {
-    return cmd == LIGHT_ON_50 || cmd == LIGHT_ON_100 || cmd == LIGHT_OFF || cmd == LIGHT_PAIR;
-  }
-
-  bool sniffCommand(short &addr, char &cmd)
-  {
-    char packet[6];
-    if (readPacket(packet) && packet[0] == 0x55 && packet[1] == 0x01 && packet[5] == 0xAA)
-    {
-      addr = (packet[2] << 8) + packet[3];
-      cmd = packet[4];
-      if (validCmd(cmd))
-      {
-        ESP_LOGD("radio", "Sniffed command %02x from remote %04x", cmd, addr);
-        return true;
-      }
-    }
-    return false;
-  }
 
   void sendStrobe(char strobe)
   {
